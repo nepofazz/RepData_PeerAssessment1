@@ -1,20 +1,104 @@
-# Reproducible Research: Peer Assessment 1
+---
+title: "PA 1"
+output: html_document
+---
 
+## 1) Loading and preprocessing data
 
-## Loading and preprocessing the data
+```{r}
+url <- "http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+download.file(url,"activity.zip")
+activity <- read.table( unzip("activity.zip"),colClasses=c("numeric","character","numeric"),sep=",",header=TRUE)
+colnames(activity)
+str(activity)
+nrow(activity)
+sum(is.na(activity$steps))
+head(activity$steps)
 
+```
 
+## 2) Mean total number of steps taken per day
 
-## What is mean total number of steps taken per day?
+```{r}
+data <- activity[complete.cases(activity),]
+data$date <- as.factor(data$date)
+head(data)
+str(data)
+steps.sum <- tapply(data$steps,data$date,sum)
+length(steps.sum)
+head(steps.sum)
+hist(steps.sum,breaks=10)
+rmean <- mean(steps.sum)
+rmedian <- median(steps.sum)
+```
+The mean is `r rmean` and the median is `r rmedian`.
 
+## 3) Daily average activity pattern
 
+```{r}
+daily.average <- tapply(data$steps,data$interval,mean)
+plot(daily.average,type="l")
+max(daily.average)
+m <- match(max(daily.average),daily.average)
+m
+k <- data$interval[m]
+k
+```
+The maximum is the `r m`-th interval, at minute `r k`
 
-## What is the average daily activity pattern?
+## 4) Imputting missing values
 
+```{r}
+sum(!complete.cases(activity))
+data.fill <- activity
+data.fill$date <- as.factor(data.fill$date)
+data.fill[is.na(data.fill$steps),"steps"] <- daily.average[match(data.fill$interval[is.na(data.fill$steps)],as.numeric(levels(as.factor(data.fill$interval))))]
+str(data.fill)
+fill.sum <- tapply(data.fill$steps,data.fill$date,sum)
+hist(fill.sum,breaks=20)
+hist(fill.sum,breaks=10)
+mean(fill.sum)
+median(fill.sum)
+```
+The median differs from the original histogram. 
+By filling in NA values regardless of the method, creates data out of nothing, and thus introduces bias.
 
+## 5) Weekday vs. Weedend activity patterns
 
-## Imputing missing values
+```{r}
+data.fill$date <- as.POSIXct(data.fill$date, format="%Y-%m-%d")
+data.fill$date <- weekdays(data.fill$date,abbreviate=TRUE)
+week <- function(x){
+        y <- vector(mode="character",length(x))
+        for (i in 1:length(x)){
+                if (x[i] == "S" | x[i] == "D") {y[i] <- "weekend"
+                }
+                else {y[i] <- "weekday"
+                }
+        }
+        y
+}
+data.week <- cbind(data.fill,as.factor(week(data.fill$date)))
+colnames(data.week)[4] <- "weekday"
+str(split(data.week,data.week$weekday))
+final <- lapply(split(data.week,data.week$weekday),function(x){
+        tapply(x$steps,x$interval,mean)
+})
+str(final)
+final.fantasy <- as.data.frame(final)
+bins <- as.numeric(rownames(table(activity$interval)))
+l <- length(table(activity$interval))
+final.fantasy$weekend <- as.numeric(final.fantasy$weekend)
+final.fantasy$weekday <- as.numeric(final.fantasy$weekday)
+final.final <- as.data.frame(cbind(c(final.fantasy$weekday,final.fantasy$weekend),c(rep("weekday",l),rep("weekend",l)),c(bins,bins)))
+colnames(final.final) <- c("step","day","int")
+final.final$step <- as.numeric(as.character((final.final$step)))
+final.final$int <- as.numeric(as.character((final.final$int)))
+str(final.final)
+library(lattice)
+xyplot(step~int|day,data=final.final,type="l")
+```
 
-
-
-## Are there differences in activity patterns between weekdays and weekends?
+During weekdays there is a peak in activity in the morning, wich is lacking in weekends. 
+Also in the weekend the activity level seems slightly higher than on weekdays.
+(seems like honest working people waking up in the morning, and then socializing in the weekends)
